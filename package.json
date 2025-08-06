@@ -1,0 +1,68 @@
+{
+  "name": "vue-print-it",
+  "version": "0.0.1",
+  "description": "A powerful Vue 3 plugin for printing components and elements with automatic style injection and optional bridge support",
+  "keywords": [
+    "vue",
+    "vue3",
+    "print",
+    "printing",
+    "plugin",
+    "typescript",
+    "browser-print",
+    "print-bridge",
+    "composables",
+    "vue-plugin"
+  ],
+  "homepage": "https://github.com/NaturalDevCR/vue-print-it#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NaturalDevCR/vue-print-it.git"
+  },
+  "bugs": {
+    "url": "https://github.com/NaturalDevCR/vue-print-it/issues"
+  },
+  "author": {
+    "name": "NaturalDevCR",
+    "url": "https://github.com/NaturalDevCR"
+  },
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "build:watch": "tsup --watch",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"Add your linting command here\"",
+    "test": "echo \"Add your test command here\""
+  },
+  "peerDependencies": {
+    "vue": "^3.0.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.5.3",
+    "vue": "^3.4.0"
+  }
+}
