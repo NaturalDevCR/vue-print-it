@@ -21,6 +21,9 @@ A simple and powerful Vue 3 plugin for printing components and elements with aut
 ✅ **Flexible Configuration** - Global and per-print options  
 ✅ **Custom Styles** - Add custom CSS for print layouts  
 ✅ **Window Specifications** - Control print window dimensions and behavior  
+✅ **Print CSS Controls** - Configure page size, orientation, scale, and print-only CSS  
+✅ **Asset Readiness** - Wait for stylesheets, fonts, and images before printing  
+✅ **Popup or Iframe Print Target** - Use a new window or an opt-in hidden iframe  
 
 ## Installation
 
@@ -391,11 +394,22 @@ function printWithEvents() {
 interface GlobalPrintOptions {
   name?: string                    // Window name (default: '_blank')
   specs?: string[] | WindowSpecs   // Window specifications
-  styles?: string[]                // Global custom styles
+  styles?: string[]                // Legacy mixed inline CSS or stylesheet URLs
+  styleUrls?: string[]             // Stylesheet URLs
+  inlineStyles?: string[]          // Inline CSS strings
   timeout?: number                 // Delay before printing (default: 1000ms)
   autoClose?: boolean              // Auto-close print window (default: true)
   windowTitle?: string             // Print window title
   preserveStyles?: boolean         // Inject page styles (default: true)
+  includeRoot?: boolean            // Print target element root too (default: true)
+  pageSize?: string                // CSS page size, e.g. 'A4' or 'Letter'
+  orientation?: 'portrait' | 'landscape'
+  scale?: number                   // Scale printed content (default: 1)
+  printCss?: string | string[]     // Print CSS injected after other styles
+  styleLoadTimeout?: number        // Stylesheet load wait timeout (default: 5000ms)
+  waitForImages?: boolean          // Wait for images before printing (default: true)
+  imageLoadTimeout?: number        // Image load wait timeout (default: 5000ms)
+  printTarget?: 'window' | 'iframe' // Browser print target (default: 'window')
 }
 
 interface WindowSpecs {
@@ -467,16 +481,33 @@ const { print } = usePrint()
 
 function printReport() {
   print('report', {
-    styles: [
-      '@media print { .no-print { display: none; } }',
+    pageSize: 'A4',
+    orientation: 'landscape',
+    scale: 0.9,
+    styleUrls: ['/print/report.css'],
+    inlineStyles: [
       'body { margin: 0; padding: 20px; }',
       '.header { border-bottom: 2px solid #000; }'
     ],
+    printCss: '@page { margin: 12mm; }',
     preserveStyles: false // Don't include page styles
   })
 }
 </script>
 ```
+
+### Hidden Iframe Printing
+
+```typescript
+print('report', {
+  printTarget: 'iframe',
+  pageSize: 'A4',
+  printCss: '@page { margin: 12mm; }'
+})
+```
+
+The default `printTarget` is `'window'` for backwards compatibility. Use
+`'iframe'` when you want to avoid opening a visible print window.
 
 ### Error Handling
 
@@ -540,10 +571,12 @@ app.use(createVuePrintIt({
   timeout: 2000,
   autoClose: false,
   preserveStyles: true,
-  styles: [
-    '@page { margin: 1in; }',
+  pageSize: 'Letter',
+  orientation: 'portrait',
+  inlineStyles: [
     'body { font-family: "Times New Roman", serif; }'
   ],
+  printCss: '@page { margin: 1in; }',
   specs: { width: 1024, height: 768 }
 }))
 ```
@@ -586,6 +619,13 @@ print('content-id', printOptions)
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+Before opening a PR or publishing a release, run:
+
+```bash
+npm run release:check
+npm audit --audit-level=moderate
+```
 
 ## License
 

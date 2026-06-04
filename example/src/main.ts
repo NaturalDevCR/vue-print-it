@@ -6,16 +6,14 @@ const app = createApp(App)
 
 // Configurar el plugin con opciones globales
 app.use(createVuePrintIt({
-  styles: [
-    // CSS externo
+  styleUrls: [
     'https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css',
-    // CSS local
     '/src/assets/print-styles.css'
   ],
   timeout: 1000,
   autoClose: true,
   windowTitle: 'Impresión - Vue Print It',
   preserveStyles: true
-}))
+}) as any)
 
 app.mount('#app')

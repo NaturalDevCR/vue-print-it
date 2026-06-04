@@ -1,4 +1,19 @@
 /**
+ * Supported CSS page orientation values
+ */
+export type PrintPageOrientation = 'portrait' | 'landscape';
+
+/**
+ * Print-specific CSS, either as one CSS string or several CSS strings
+ */
+export type PrintCss = string | string[];
+
+/**
+ * Browser print transport
+ */
+export type PrintTarget = 'window' | 'iframe';
+
+/**
  * Configuration options for individual print operations
  */
 export interface PrintOptions {
@@ -8,6 +23,10 @@ export interface PrintOptions {
   specs?: string[] | { width?: number; height?: number };
   /** Array of custom CSS styles to apply */
   styles?: string[];
+  /** Stylesheet URLs to inject after preserved page styles */
+  styleUrls?: string[];
+  /** Inline CSS strings to inject after stylesheet URLs */
+  inlineStyles?: string[];
   /** Delay in milliseconds before printing (default: 1000) */
   timeout?: number;
   /** Whether to automatically close the print window (default: true) */
@@ -16,6 +35,24 @@ export interface PrintOptions {
   windowTitle?: string;
   /** Whether to preserve original page styles (default: true) */
   preserveStyles?: boolean;
+  /** Whether to include the target element itself instead of only its children (default: true) */
+  includeRoot?: boolean;
+  /** CSS page size, for example 'A4', 'Letter', or '210mm 297mm' */
+  pageSize?: string;
+  /** CSS page orientation */
+  orientation?: PrintPageOrientation;
+  /** Scale applied to the printed content (default: 1) */
+  scale?: number;
+  /** Print-specific CSS injected after preserved/custom styles */
+  printCss?: PrintCss;
+  /** Maximum time in milliseconds to wait for stylesheet links to load (default: 5000) */
+  styleLoadTimeout?: number;
+  /** Whether to wait for images in the print document before printing (default: true) */
+  waitForImages?: boolean;
+  /** Maximum time in milliseconds to wait for images to load (default: 5000) */
+  imageLoadTimeout?: number;
+  /** Browser print target (default: 'window') */
+  printTarget?: PrintTarget;
   /** Callback executed before printing starts */
   onBeforePrint?: () => void | Promise<void>;
   /** Callback executed after printing completes */
@@ -42,6 +79,10 @@ export interface GlobalPrintOptions {
   specs?: string[] | { width?: number; height?: number };
   /** Array of custom CSS styles to apply */
   styles?: string[];
+  /** Stylesheet URLs to inject after preserved page styles */
+  styleUrls?: string[];
+  /** Inline CSS strings to inject after stylesheet URLs */
+  inlineStyles?: string[];
   /** Delay in milliseconds before printing (default: 1000) */
   timeout?: number;
   /** Whether to automatically close the print window (default: true) */
@@ -50,6 +91,32 @@ export interface GlobalPrintOptions {
   windowTitle?: string;
   /** Whether to preserve original page styles (default: true) */
   preserveStyles?: boolean;
+  /** Whether to include the target element itself instead of only its children (default: true) */
+  includeRoot?: boolean;
+  /** CSS page size, for example 'A4', 'Letter', or '210mm 297mm' */
+  pageSize?: string;
+  /** CSS page orientation */
+  orientation?: PrintPageOrientation;
+  /** Scale applied to the printed content (default: 1) */
+  scale?: number;
+  /** Print-specific CSS injected after preserved/custom styles */
+  printCss?: PrintCss;
+  /** Maximum time in milliseconds to wait for stylesheet links to load (default: 5000) */
+  styleLoadTimeout?: number;
+  /** Whether to wait for images in the print document before printing (default: true) */
+  waitForImages?: boolean;
+  /** Maximum time in milliseconds to wait for images to load (default: 5000) */
+  imageLoadTimeout?: number;
+  /** Browser print target (default: 'window') */
+  printTarget?: PrintTarget;
+}
+
+/**
+ * Plugin-level configuration options
+ */
+export interface VuePrintItOptions extends GlobalPrintOptions {
+  /** Custom name for the global method (default: '$print') */
+  globalMethodName?: string;
 }
 
 /**
@@ -115,6 +182,32 @@ export interface BridgePrintResponse {
 }
 
 /**
+ * Bridge plugin state exposed through Vue global properties
+ */
+export interface BridgePluginState {
+  availablePrinters: BridgePrinter[];
+  defaultPrinter: string | null;
+  isConnected: boolean;
+  lastUpdated: Date | null;
+}
+
+/**
+ * Bridge client exposed through Vue global properties
+ */
+export interface PrintBridgeInstance {
+  checkAvailability: () => Promise<boolean>;
+  getHealth: () => Promise<BridgeHealthResponse | null>;
+  getPrinters: () => Promise<BridgePrinter[]>;
+  print: (request: BridgePrintRequest) => Promise<BridgePrintResponse>;
+  htmlToBase64: (html: string) => string;
+  readonly available: boolean | null;
+  updatePrinters?: () => Promise<void>;
+  setDefaultPrinter?: (printerName: string) => boolean;
+  getDefaultPrinter?: () => string | null;
+  getState?: () => BridgePluginState;
+}
+
+/**
  * Print instance interface for global methods
  */
 export interface PrintInstance {
@@ -124,6 +217,11 @@ export interface PrintInstance {
   getAvailablePrinters: () => Promise<BridgePrinter[]>;
   printDirect: (content: string, options?: Partial<BridgePrintRequest>) => Promise<BridgePrintResponse>;
 }
+
+/**
+ * Callable global print method with helper methods attached
+ */
+export type GlobalPrintMethod = PrintInstance['print'] & Omit<PrintInstance, 'print'>;
 
 /**
  * Print store interface for managing containers and data
@@ -136,4 +234,12 @@ export interface PrintStore {
   setData: (key: string, data: any) => void;
   getData: (key: string) => any;
   clear: (key: string) => void;
+}
+
+declare module '@vue/runtime-core' {
+  interface ComponentCustomProperties {
+    $print: GlobalPrintMethod;
+    $printBridge?: PrintBridgeInstance;
+    $printBridgeState?: BridgePluginState;
+  }
 }

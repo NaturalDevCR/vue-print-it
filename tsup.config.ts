@@ -9,7 +9,6 @@ export default defineConfig({
   sourcemap: true,
   minify: false,
   external: ['vue'],
-  treeshake: true,
   target: 'es2018',
   outDir: 'dist',
   banner: {

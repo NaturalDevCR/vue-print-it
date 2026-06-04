@@ -1,117 +1,187 @@
-import type { BridgeHealthResponse, BridgePrinter, BridgePrintRequest, BridgePrintResponse } from '../types';
+import type {
+  BridgeHealthResponse,
+  BridgePluginOptions,
+  BridgePrinter,
+  BridgePrintRequest,
+  BridgePrintResponse,
+} from '../types';
+
+interface BridgeClientConfig {
+  baseUrl: string;
+  timeout: number;
+  retryAttempts: number;
+  headers: Record<string, string>;
+  debug: boolean;
+}
 
 /**
- * Client for communicating with the print bridge service
+ * Client for communicating with the print bridge service.
  * @example
  * ```typescript
- * const client = new BridgeClient('http://localhost:8765')
+ * const client = new BridgeClient({ baseUrl: 'http://localhost:8765' })
  * const isAvailable = await client.checkAvailability()
  * ```
  */
 export class BridgeClient {
-  private baseUrl: string;
+  private config: BridgeClientConfig;
   private isAvailable: boolean | null = null;
-  
+
   /**
-   * Creates a new BridgeClient instance
-   * @param baseUrl - Base URL of the bridge service (default: 'http://localhost:8765')
+   * Creates a new BridgeClient instance.
+   * Accepts the legacy baseUrl string or the full bridge plugin options object.
    */
-  constructor(baseUrl: string = 'http://localhost:8765') {
-    this.baseUrl = baseUrl;
+  constructor(options: string | BridgePluginOptions = 'http://localhost:8765') {
+    const normalizedOptions =
+      typeof options === 'string' ? { baseUrl: options } : options;
+
+    this.config = {
+      baseUrl: normalizedOptions.baseUrl || 'http://localhost:8765',
+      timeout: normalizedOptions.timeout ?? 2000,
+      retryAttempts: normalizedOptions.retryAttempts ?? 3,
+      headers: normalizedOptions.headers || {},
+      debug: normalizedOptions.debug ?? false,
+    };
   }
-  
+
+  private log(message: string, error?: unknown): void {
+    if (this.config.debug) {
+      console.debug(message, error);
+    }
+  }
+
+  private async fetchWithTimeout(
+    path: string,
+    init: RequestInit = {}
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+    const headers = { ...this.config.headers };
+    new Headers(init.headers).forEach((value, key) => {
+      headers[key] = value;
+    });
+
+    try {
+      return await fetch(`${this.config.baseUrl}${path}`, {
+        ...init,
+        headers,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  private async withRetries<T>(
+    operation: () => Promise<T>,
+    onFailedAttempt?: (error: unknown, attempt: number) => void
+  ): Promise<T> {
+    const attempts = Math.max(1, this.config.retryAttempts);
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error;
+        onFailedAttempt?.(error, attempt);
+      }
+    }
+
+    throw lastError;
+  }
+
   /**
-   * Checks if the bridge service is available and responding
-   * @returns Promise that resolves to true if bridge is available
+   * Checks if the bridge service is available and responding.
    */
   async checkAvailability(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/health`, {
-        method: 'GET',
-        signal: AbortSignal.timeout(2000) // Timeout de 2 segundos
-      });
-      
-      if (response.ok) {
-        this.isAvailable = true;
-        return true;
-      }
+      const response = await this.withRetries(
+        () => this.fetchWithTimeout('/health', { method: 'GET' }),
+        (error, attempt) => {
+          this.log(`Bridge availability attempt ${attempt} failed`, error);
+        }
+      );
+
+      this.isAvailable = response.ok;
+      return response.ok;
     } catch (error) {
-      console.debug('Bridge no disponible:', error);
+      this.log('Bridge not available', error);
+      this.isAvailable = false;
+      return false;
     }
-    
-    this.isAvailable = false;
-    return false;
   }
-  
+
   /**
-   * Gets the health status of the bridge service
-   * @returns Promise that resolves to bridge health information or null if unavailable
+   * Gets the health status of the bridge service.
    */
   async getHealth(): Promise<BridgeHealthResponse | null> {
     try {
-      const response = await fetch(`${this.baseUrl}/health`);
+      const response = await this.withRetries(() =>
+        this.fetchWithTimeout('/health')
+      );
       if (response.ok) {
         return await response.json();
       }
     } catch (error) {
-      console.debug('Error obteniendo estado del bridge:', error);
+      this.log('Error getting bridge health', error);
     }
+
     return null;
   }
-  
+
   /**
-   * Gets list of available printers from the bridge
-   * @returns Promise that resolves to array of available printers
+   * Gets list of available printers from the bridge.
    */
   async getPrinters(): Promise<BridgePrinter[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/printers`);
+      const response = await this.withRetries(() =>
+        this.fetchWithTimeout('/api/printers')
+      );
       if (response.ok) {
         return await response.json();
       }
     } catch (error) {
-      console.debug('Error obteniendo impresoras:', error);
+      this.log('Error getting printers', error);
     }
+
     return [];
   }
-  
+
   /**
-   * Sends content directly to a printer via the bridge
-   * @param request - Print request configuration
-   * @returns Promise that resolves to print response with job information
+   * Sends content directly to a printer via the bridge.
    */
   async print(request: BridgePrintRequest): Promise<BridgePrintResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/print`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(request)
-      });
-      
+      const response = await this.withRetries(() =>
+        this.fetchWithTimeout('/api/print', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(request),
+        })
+      );
+
       if (response.ok) {
         return await response.json();
-      } else {
-        const error = await response.text();
-        throw new Error(`Error del bridge: ${error}`);
       }
+
+      const error = await response.text();
+      throw new Error(`Bridge error: ${error}`);
     } catch (error) {
-      throw new Error(`Error comunicándose con el bridge: ${error}`);
+      throw new Error(`Error communicating with bridge: ${error}`);
     }
   }
-  
+
   /**
-   * Converts HTML string to Base64 encoding for bridge transmission
-   * @param html - HTML string to encode
-   * @returns Base64 encoded string
+   * Converts HTML string to Base64 encoding for bridge transmission.
    */
   htmlToBase64(html: string): string {
     return btoa(unescape(encodeURIComponent(html)));
   }
-  
+
   /**
-   * Getter para saber si el bridge está disponible
+   * Whether the bridge was available during the last check.
    */
   get available(): boolean | null {
     return this.isAvailable;

@@ -1,16 +1,17 @@
-import type { App } from 'vue';
+import type { App, Plugin } from 'vue';
 import { getCurrentInstance, inject, ref, onMounted, reactive } from 'vue';
-import type { BridgePluginOptions, BridgePrinter } from '../types';
+import type {
+  BridgePluginOptions,
+  BridgePluginState,
+  PrintBridgeInstance,
+} from '../types';
 import { BridgeClient } from '../utils/bridge-client';
 
-/**
- * Bridge plugin state interface
- */
-interface BridgeState {
-  availablePrinters: BridgePrinter[];
-  defaultPrinter: string | null;
-  isConnected: boolean;
-  lastUpdated: Date | null;
+interface EnhancedBridgeClient extends BridgeClient, PrintBridgeInstance {
+  updatePrinters: () => Promise<void>;
+  setDefaultPrinter: (printerName: string) => boolean;
+  getDefaultPrinter: () => string | null;
+  getState: () => BridgePluginState;
 }
 
 /**
@@ -26,9 +27,10 @@ interface BridgeState {
  * }))
  * ```
  */
-export function createVuePrintItBridge(options: BridgePluginOptions = {}) {
+export function createVuePrintItBridge(options: BridgePluginOptions = {}): Plugin {
+  const baseUrl = options.baseUrl || `http://localhost:${options.port || 8765}`;
   const bridgeOptions = {
-    baseUrl: 'http://localhost:8765',
+    baseUrl,
     autoConnect: false,
     autoSelectDefault: true,
     timeout: 2000,
@@ -37,7 +39,7 @@ export function createVuePrintItBridge(options: BridgePluginOptions = {}) {
   };
 
   // Create reactive bridge state
-  const bridgeState = reactive<BridgeState>({
+  const bridgeState = reactive<BridgePluginState>({
     availablePrinters: [],
     defaultPrinter: bridgeOptions.defaultPrinter || null,
     isConnected: false,
@@ -46,7 +48,7 @@ export function createVuePrintItBridge(options: BridgePluginOptions = {}) {
 
   return {
     install(app: App) {
-      const bridgeClient = new BridgeClient(bridgeOptions.baseUrl);
+      const bridgeClient = new BridgeClient(bridgeOptions);
       
       /**
        * Updates the list of available printers and selects default if needed
@@ -74,12 +76,16 @@ export function createVuePrintItBridge(options: BridgePluginOptions = {}) {
                   bridgeState.defaultPrinter = printers[0].name;
                 }
                 
-                console.log(`Auto-selected default printer: ${bridgeState.defaultPrinter}`);
+                if (bridgeOptions.debug) {
+                  console.debug(`Auto-selected default printer: ${bridgeState.defaultPrinter}`);
+                }
               }
             }
           }
         } catch (error) {
-          console.warn('Failed to update printers:', error);
+          if (bridgeOptions.debug) {
+            console.warn('Failed to update printers:', error);
+          }
           bridgeState.isConnected = false;
         }
       };
@@ -93,10 +99,14 @@ export function createVuePrintItBridge(options: BridgePluginOptions = {}) {
         const printer = bridgeState.availablePrinters.find(p => p.name === printerName);
         if (printer) {
           bridgeState.defaultPrinter = printerName;
-          console.log(`Default printer changed to: ${printerName}`);
+          if (bridgeOptions.debug) {
+            console.debug(`Default printer changed to: ${printerName}`);
+          }
           return true;
         }
-        console.warn(`Printer '${printerName}' not found in available printers`);
+        if (bridgeOptions.debug) {
+          console.warn(`Printer '${printerName}' not found in available printers`);
+        }
         return false;
       };
       
@@ -108,14 +118,13 @@ export function createVuePrintItBridge(options: BridgePluginOptions = {}) {
         return bridgeState.defaultPrinter;
       };
       
-      // Enhanced bridge client with state management
-      const enhancedBridgeClient = {
-        ...bridgeClient,
+      // Enhance the class instance without losing prototype methods.
+      const enhancedBridgeClient: EnhancedBridgeClient = Object.assign(bridgeClient, {
         updatePrinters,
         setDefaultPrinter,
         getDefaultPrinter,
         getState: () => ({ ...bridgeState })
-      };
+      });
       
       // Provide bridge client and state globally
       app.provide('vuePrintItBridge', enhancedBridgeClient);
@@ -148,9 +157,13 @@ export function createVuePrintItBridge(options: BridgePluginOptions = {}) {
  */
 export function usePrintBridge() {
   const instance = getCurrentInstance();
-  const bridgeClient = inject('vuePrintItBridge') || instance?.appContext.config.globalProperties.$printBridge;
+  const bridgeClient =
+    inject<EnhancedBridgeClient | null>('vuePrintItBridge', null) ||
+    instance?.appContext.config.globalProperties.$printBridge;
   const bridgeOptions = inject('vuePrintItBridgeOptions');
-  const bridgeState = inject('vuePrintItBridgeState') || instance?.appContext.config.globalProperties.$printBridgeState;
+  const bridgeState =
+    inject<BridgePluginState | null>('vuePrintItBridgeState', null) ||
+    instance?.appContext.config.globalProperties.$printBridgeState;
   
   const isAvailable = ref<boolean | null>(null);
   
@@ -158,7 +171,11 @@ export function usePrintBridge() {
     if (bridgeClient) {
       isAvailable.value = await bridgeClient.checkAvailability();
       // Auto-update printers on mount if not already done
-      if (isAvailable.value && bridgeState?.availablePrinters.length === 0) {
+      if (
+        isAvailable.value &&
+        bridgeState?.availablePrinters.length === 0 &&
+        bridgeClient.updatePrinters
+      ) {
         await bridgeClient.updatePrinters();
       }
     }

@@ -1,6 +1,10 @@
-import type { App } from 'vue';
-import type { GlobalPrintOptions } from './types';
-import { createPrintFunction } from './composables/usePrint';
+import type { App, Plugin } from 'vue';
+import type { GlobalPrintMethod, VuePrintItOptions } from './types';
+import {
+  createPrintFunction,
+  VUE_PRINT_IT_INJECTION_KEY,
+  VUE_PRINT_IT_METHOD_NAME_KEY,
+} from './composables/usePrint';
 
 /**
  * Creates a Vue 3 plugin for vue-print-it with global printing functionality
@@ -15,24 +19,24 @@ import { createPrintFunction } from './composables/usePrint';
  * }))
  * ```
  */
-export function createVuePrintIt(options: GlobalPrintOptions & { globalMethodName?: string } = {}) {
+export function createVuePrintIt(options: VuePrintItOptions = {}): Plugin {
   return {
     install(app: App) {
-      const printFunctions = createPrintFunction(options);
-      
-      // Allow customizing the global method name
+      const printFunctions = createPrintFunction(
+        options,
+        () => app.config.globalProperties.$printBridge || null
+      );
       const methodName = options.globalMethodName || '$print';
-      
-      // Register the main method and additional methods
-      app.config.globalProperties[methodName] = printFunctions.print;
-      
-      // Only add bridge methods if bridge plugin is installed
-      const bridgeClient = app.config.globalProperties.$printBridge;
-      if (bridgeClient) {
-        app.config.globalProperties[methodName].getBridgeStatus = printFunctions.getBridgeStatus;
-        app.config.globalProperties[methodName].getAvailablePrinters = printFunctions.getAvailablePrinters;
-        app.config.globalProperties[methodName].printDirect = printFunctions.printDirect;
-      }
+      const globalPrint = printFunctions.print as GlobalPrintMethod;
+
+      globalPrint.printComponent = printFunctions.printComponent;
+      globalPrint.getBridgeStatus = printFunctions.getBridgeStatus;
+      globalPrint.getAvailablePrinters = printFunctions.getAvailablePrinters;
+      globalPrint.printDirect = printFunctions.printDirect;
+
+      app.config.globalProperties[methodName] = globalPrint;
+      app.provide(VUE_PRINT_IT_INJECTION_KEY, printFunctions);
+      app.provide(VUE_PRINT_IT_METHOD_NAME_KEY, methodName);
     }
   };
 }
