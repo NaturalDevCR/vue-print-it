@@ -5,6 +5,8 @@
 /example/node_modules
 /dist
 /example/dist
+/docs/.vitepress/cache
+/docs/.vitepress/dist
 .DS_Store
 *.tgz
 coverage/

@@ -1,6 +1,6 @@
 {
   "name": "vue-print-it",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A powerful Vue 3 plugin for printing components and elements with automatic style injection and optional bridge support",
   "keywords": [
     "vue",
@@ -51,13 +51,16 @@
     "build": "tsup",
     "build:watch": "tsup --watch",
     "dev": "tsup --watch",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist docs/.vitepress/dist docs/.vitepress/cache",
     "prepublishOnly": "npm run clean && npm run build",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
     "typecheck": "tsc --noEmit",
     "lint": "echo \"Add your linting command here\"",
     "test": "vitest run",
     "pack:dry-run": "npm pack --dry-run",
-    "release:check": "npm run typecheck && npm test && npm run build && npm run pack:dry-run"
+    "release:check": "npm run typecheck && npm test && npm run build && npm run docs:build && npm run pack:dry-run"
   },
   "peerDependencies": {
     "vue": "^3.0.0"
@@ -66,6 +69,7 @@
     "jsdom": "^29.1.1",
     "tsup": "^8.5.0",
     "typescript": "^5.5.3",
+    "vitepress": "^1.6.4",
     "vitest": "^4.1.8",
     "vue": "^3.4.0"
   }
