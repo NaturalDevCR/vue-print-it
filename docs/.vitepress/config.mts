@@ -3,6 +3,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: 'Vue Print It',
   description: 'Vue 3 browser and bridge printing plugin',
+  base: '/vue-print-it/',
   lang: 'en-US',
   cleanUrls: true,
   lastUpdated: true,
